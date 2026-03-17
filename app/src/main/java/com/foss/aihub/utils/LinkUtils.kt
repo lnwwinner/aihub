@@ -6,24 +6,27 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
+import com.foss.aihub.R
 
-fun extractLinkTitle(url: String): String {
-    if (url.isEmpty()) return "Link"
+fun extractLinkTitle(context: Context, url: String): String {
+    if (url.isEmpty()) return context.getString(R.string.label_link)
+
     return try {
         url.substringAfterLast("/").substringBefore("?").substringBefore("#")
             .replace(Regex("[_-]"), " ").replace(Regex("\\.[a-zA-Z]{2,4}$"), "").trim()
             .takeIf { it.isNotEmpty() && it != "null" }?.split(" ")?.joinToString(" ") { word ->
                 word.replaceFirstChar { it.uppercase() }
-            } ?: "Link"
+            } ?: context.getString(R.string.label_link)
     } catch (_: Exception) {
-        "Link"
+        context.getString(R.string.label_link)
     }
 }
 
 fun copyLinkToClipboard(context: Context, url: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    val clip = ClipData.newPlainText("URL", url)
+    val clip = ClipData.newPlainText(context.getString(R.string.label_url), url)
     clipboard.setPrimaryClip(clip)
 }
 
@@ -34,7 +37,7 @@ fun shareLink(context: Context, url: String, title: String) {
         putExtra(Intent.EXTRA_SUBJECT, title)
     }
     context.startActivity(
-        Intent.createChooser(shareIntent, "Share link").apply {
+        Intent.createChooser(shareIntent, context.getString(R.string.action_share_link)).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
 }

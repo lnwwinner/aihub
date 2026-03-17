@@ -1,5 +1,6 @@
 package com.foss.aihub.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -13,10 +14,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,7 +31,6 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Restore
@@ -72,15 +70,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.foss.aihub.R
 import com.foss.aihub.ui.components.Md3TopAppBar
-import com.foss.aihub.ui.webview.WebViewSecurity
 import com.foss.aihub.utils.SettingsManager
 import com.foss.aihub.utils.aiServices
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
@@ -89,14 +90,10 @@ fun SettingsScreen(
     onManageServicesClick: () -> Unit,
     onClearCache: () -> Unit,
     onClearData: () -> Unit,
-    onAboutClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    var blockUnnecessaryConnections by remember {
-        mutableStateOf(WebViewSecurity.isBlockingEnabled)
-    }
 
     val settings by settingsManager.settingsFlow.collectAsState()
 
@@ -112,14 +109,21 @@ fun SettingsScreen(
             if (settings.maxKeepAlive == Int.MAX_VALUE) 5 else settings.maxKeepAlive
         )
     }
-
     var desktopView by remember { mutableStateOf(settings.desktopView) }
     var thirdPartyCookies by remember { mutableStateOf(settings.thirdPartyCookies) }
-
-    val fontSizeOptions = listOf("x-small", "small", "medium", "large", "x-large")
+    var blockUnnecessaryConnections by remember {
+        mutableStateOf(settings.blockUnnecessaryConnections)
+    }
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
+
+    val fontSizeOptions = listOf("x-small", "small", "medium", "large", "x-large")
+
+    val orderedServices = remember(settings) {
+        settings.serviceOrder.filter { it in settings.enabledServices }
+            .mapNotNull { id -> aiServices.find { it.id == id } }
+    }
 
     LaunchedEffect(loadLastAi) {
         settingsManager.updateSettings { it.loadLastOpenedAI = loadLastAi }
@@ -157,15 +161,10 @@ fun SettingsScreen(
         settingsManager.updateSettings { it.thirdPartyCookies = thirdPartyCookies }
     }
 
-    val orderedServices = remember(settings) {
-        settings.serviceOrder.filter { it in settings.enabledServices }
-            .mapNotNull { id -> aiServices.find { it.id == id } }
-    }
-
     Scaffold(
         modifier = Modifier.fillMaxSize(), topBar = {
         Md3TopAppBar(
-            title = "Settings", onBack = onBack
+            title = stringResource(R.string.title_settings), onBack = onBack
         )
     }, snackbarHost = {
         SnackbarHost(hostState = snackbarHostState)
@@ -182,8 +181,8 @@ fun SettingsScreen(
                 SettingsCard {
                     Column {
                         SettingItem(
-                            title = "Theme",
-                            description = "Choose between system default, light or dark",
+                            title = stringResource(R.string.setting_theme),
+                            description = stringResource(R.string.setting_theme_description),
                             icon = Icons.Outlined.Palette,
                             iconColor = MaterialTheme.colorScheme.primary,
                         )
@@ -221,9 +220,9 @@ fun SettingsScreen(
                                 ) {
                                     Text(
                                         text = when (option) {
-                                        "auto" -> "Auto"
-                                        "light" -> "Light"
-                                        "dark" -> "Dark"
+                                        "auto" -> stringResource(R.string.theme_auto)
+                                        "light" -> stringResource(R.string.theme_light)
+                                        "dark" -> stringResource(R.string.theme_dark)
                                         else -> option.replaceFirstChar {
                                             if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
                                         }
@@ -232,23 +231,8 @@ fun SettingsScreen(
                             }
                         }
 
-                        AnimatedVisibility(visible = selectedTheme != "auto") {
-                            Text(
-                                text = when (selectedTheme) {
-                                    "light" -> "Always uses light mode"
-                                    "dark" -> "Always uses dark mode"
-                                    else -> ""
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(
-                                    start = 16.dp, end = 16.dp, bottom = 12.dp
-                                )
-                            )
-                        }
-
                         Text(
-                            text = "Theme switching is temporarily disabled (not working correctly)",
+                            text = stringResource(R.string.msg_theme_switch_disabled),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier
@@ -261,7 +245,7 @@ fun SettingsScreen(
 
             item {
                 Text(
-                    text = "Preferences",
+                    text = stringResource(R.string.section_preferences),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -273,8 +257,8 @@ fun SettingsScreen(
                 SettingsCard {
                     Column {
                         SettingItem(
-                            title = "Load last opened AI",
-                            description = "Reopen the last used assistant on launch",
+                            title = stringResource(R.string.setting_restore_last_ai),
+                            description = stringResource(R.string.setting_restore_last_ai_description),
                             icon = Icons.Outlined.Restore,
                             iconColor = MaterialTheme.colorScheme.primary
                         ) {
@@ -296,22 +280,26 @@ fun SettingsScreen(
                             exit = fadeOut() + shrinkVertically()
                         ) {
                             Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                                ListItem(headlineContent = {
-                                    Text(
-                                        "Default AI Assistant",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }, supportingContent = {
-                                    Text("Shown when app starts")
-                                }, leadingContent = {
-                                    Icon(
-                                        Icons.Outlined.Home,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                })
+                                ListItem(
+                                    headlineContent = {
+                                        Text(
+                                            text = stringResource(R.string.setting_default_ai),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    supportingContent = {
+                                        Text(stringResource(R.string.setting_default_ai_description))
+                                    },
+                                    leadingContent = {
+                                        Icon(
+                                            Icons.Outlined.Home,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    },
+                                )
 
                                 FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -339,7 +327,7 @@ fun SettingsScreen(
 
                                     if (orderedServices.isEmpty()) {
                                         Text(
-                                            "No AI services enabled",
+                                            text = stringResource(R.string.msg_no_ai_services_enabled),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(8.dp)
@@ -355,25 +343,26 @@ fun SettingsScreen(
                         )
 
                         SettingItem(
-                            title = "Manage AI Services",
-                            description = "Enable, disable & reorder assistants",
+                            title = stringResource(R.string.setting_manage_ai_services),
+                            description = stringResource(R.string.setting_manage_ai_services_description),
                             icon = Icons.Outlined.Apps,
                             iconColor = MaterialTheme.colorScheme.primary,
                             onClick = onManageServicesClick,
                             trailingContent = {
                                 Icon(
                                     Icons.Outlined.ChevronRight,
-                                    contentDescription = "Go to manage services",
+                                    contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            })
+                            },
+                        )
                     }
                 }
             }
 
             item {
                 Text(
-                    text = "Performance",
+                    text = stringResource(R.string.section_performance),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -384,8 +373,8 @@ fun SettingsScreen(
                 SettingsCard {
                     Column {
                         SettingItem(
-                            title = "Memory Management",
-                            description = "Control simultaneous AI loading",
+                            title = stringResource(R.string.setting_memory_management),
+                            description = stringResource(R.string.setting_memory_management_description),
                             icon = Icons.Outlined.Layers,
                             iconColor = MaterialTheme.colorScheme.primary
                         ) {
@@ -417,7 +406,7 @@ fun SettingsScreen(
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Text(
-                                        "Max:",
+                                        "${stringResource(R.string.label_max)}:",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(bottom = 4.dp)
@@ -446,21 +435,6 @@ fun SettingsScreen(
                                         }
                                     }
                                 }
-
-                                Spacer(Modifier.height(4.dp))
-
-                                Text(
-                                    text = when (maxKeepAlive) {
-                                        1 -> "Minimal memory"
-                                        2 -> "Balanced"
-                                        3 -> "Recommended"
-                                        4 -> "Smooth"
-                                        5 -> "Maximum convenience"
-                                        else -> ""
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
                     }
@@ -469,7 +443,7 @@ fun SettingsScreen(
 
             item {
                 Text(
-                    text = "WebView",
+                    text = stringResource(R.string.section_webview),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -481,8 +455,8 @@ fun SettingsScreen(
                 SettingsCard {
                     Column {
                         SettingItem(
-                            title = "Pinch to zoom",
-                            description = "Zoom in and out of web pages",
+                            title = stringResource(R.string.setting_pinch_to_zoom),
+                            description = stringResource(R.string.setting_pinch_to_zoom_description),
                             icon = Icons.Outlined.ZoomIn,
                             iconColor = MaterialTheme.colorScheme.primary
                         ) {
@@ -504,8 +478,8 @@ fun SettingsScreen(
                         )
 
                         SettingItem(
-                            title = "Desktop mode",
-                            description = "Request desktop versions of websites",
+                            title = stringResource(R.string.setting_desktop_mode),
+                            description = stringResource(R.string.setting_desktop_mode_description),
                             icon = Icons.Outlined.Computer,
                             iconColor = MaterialTheme.colorScheme.primary
                         ) {
@@ -527,8 +501,8 @@ fun SettingsScreen(
                         )
 
                         SettingItem(
-                            title = "Allow third-party cookies",
-                            description = "May be required for some logins",
+                            title = stringResource(R.string.setting_third_party_cookies),
+                            description = stringResource(R.string.setting_third_party_cookies_description),
                             icon = Icons.Outlined.Cookie,
                             iconColor = MaterialTheme.colorScheme.primary
                         ) {
@@ -550,8 +524,8 @@ fun SettingsScreen(
                         )
 
                         SettingItem(
-                            title = "Font size",
-                            description = "Change text size",
+                            title = stringResource(R.string.setting_font_size),
+                            description = stringResource(R.string.setting_font_size_description),
                             icon = Icons.Outlined.TextIncrease,
                             iconColor = MaterialTheme.colorScheme.primary,
                             onClick = { showFontSizeOptions = !showFontSizeOptions }) {
@@ -588,7 +562,14 @@ fun SettingsScreen(
                                             .padding(vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = option.replaceFirstChar { it.uppercase() },
+                                            text = when (option) {
+                                                "x-small" -> stringResource(R.string.label_font_size_xsmall)
+                                                "small" -> stringResource(R.string.label_font_size_small)
+                                                "medium" -> stringResource(R.string.label_font_size_medium)
+                                                "large" -> stringResource(R.string.label_font_size_large)
+                                                "x-large" -> stringResource(R.string.label_font_size_xlarge)
+                                                else -> option
+                                            },
                                             modifier = Modifier.weight(1f),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -611,7 +592,7 @@ fun SettingsScreen(
 
             item {
                 Text(
-                    text = "Security & Privacy",
+                    text = stringResource(R.string.section_security_privacy),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -622,15 +603,17 @@ fun SettingsScreen(
             item {
                 SettingsCard {
                     SettingItem(
-                        title = "Block trackers & ads",
-                        description = "Recommended for privacy",
+                        title = stringResource(R.string.setting_block_trackers_ads),
+                        description = stringResource(R.string.setting_block_trackers_ads_description),
                         icon = Icons.Outlined.Block,
                         iconColor = MaterialTheme.colorScheme.primary
                     ) {
                         Switch(
                             checked = blockUnnecessaryConnections, onCheckedChange = {
                                 blockUnnecessaryConnections = it
-                                WebViewSecurity.isBlockingEnabled = it
+                                settingsManager.updateSettings { settings ->
+                                    settings.blockUnnecessaryConnections = it
+                                }
                             }, colors = SwitchDefaults.colors(
                                 checkedThumbColor = MaterialTheme.colorScheme.primary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
@@ -644,7 +627,7 @@ fun SettingsScreen(
 
             item {
                 Text(
-                    text = "Storage",
+                    text = stringResource(R.string.section_storage),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -656,14 +639,15 @@ fun SettingsScreen(
                 SettingsCard {
                     Column {
                         SettingItem(
-                            title = "Clear cache",
-                            description = "Removes temporary files",
+                            title = stringResource(R.string.action_clear_all_cache),
+                            description = stringResource(R.string.action_clear_all_cache_description),
                             icon = Icons.Outlined.Delete,
                             iconColor = MaterialTheme.colorScheme.primary,
                             onClick = { showClearCacheDialog = true },
                             trailingContent = {
                                 Icon(Icons.Outlined.ChevronRight, null)
-                            })
+                            },
+                        )
 
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant,
@@ -671,8 +655,8 @@ fun SettingsScreen(
                         )
 
                         SettingItem(
-                            title = "Clear all data",
-                            description = "Resets everything - use carefully",
+                            title = stringResource(R.string.action_clear_all_data),
+                            description = stringResource(R.string.action_clear_all_data_description),
                             icon = Icons.Outlined.DeleteSweep,
                             iconColor = MaterialTheme.colorScheme.error,
                             onClick = { showClearDataDialog = true },
@@ -682,36 +666,9 @@ fun SettingsScreen(
                                     null,
                                     tint = MaterialTheme.colorScheme.error
                                 )
-                            })
+                            },
+                        )
                     }
-                }
-            }
-
-            item {
-                Text(
-                    text = "About",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-                )
-            }
-
-            item {
-                SettingsCard {
-                    SettingItem(
-                        title = "About AI Hub",
-                        description = "Version • License • Credits",
-                        icon = Icons.Outlined.Info,
-                        iconColor = MaterialTheme.colorScheme.primary,
-                        onClick = onAboutClick,
-                        trailingContent = {
-                            Icon(
-                                Icons.Outlined.ChevronRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        })
                 }
             }
         }
@@ -720,57 +677,61 @@ fun SettingsScreen(
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            title = { Text("Clear Cache") },
-            text = { Text("Removes temporary web files.\nMay log you out of sites.") },
+            title = { Text(stringResource(R.string.action_clear_cache)) },
+
+            text = { Text(stringResource(R.string.msg_clear_all_cache_confirmation)) },
             confirmButton = {
-                TextButton(onClick = {
-                    onClearCache()
-                    showClearCacheDialog = false
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Cache cleared successfully",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                }) {
-                    Text("Clear")
+                TextButton(
+                    onClick = {
+                        onClearCache()
+                        showClearCacheDialog = false
+                    },
+                ) {
+                    Text(stringResource(R.string.action_clear))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearCacheDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
-            })
+            },
+        )
     }
 
     if (showClearDataDialog) {
-        AlertDialog(onDismissRequest = { showClearDataDialog = false }, title = {
-            Text(
-                "Clear All Data", color = MaterialTheme.colorScheme.error
-            )
-        }, text = {
-            Text(
-                "Deletes cache, cookies, history, logins…\n" + "This cannot be undone."
-            )
-        }, confirmButton = {
-            TextButton(onClick = {
-                onClearData()
-                showClearDataDialog = false
-                scope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "All data cleared successfully", duration = SnackbarDuration.Short
+        AlertDialog(
+            onDismissRequest = { showClearDataDialog = false },
+            title = {
+                Text(
+                    stringResource(R.string.action_clear_all_data),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.msg_clear_all_data_confirmation)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onClearData()
+                        showClearDataDialog = false
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.action_clear_everything),
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
-            }) {
-                Text(
-                    "Clear Everything", color = MaterialTheme.colorScheme.error
-                )
-            }
-        }, dismissButton = {
-            TextButton(onClick = { showClearDataDialog = false }) {
-                Text("Cancel")
-            }
-        })
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDataDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -785,10 +746,10 @@ private fun SettingItem(
 ) {
     ListItem(
         headlineContent = {
-        Text(
-            title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium
-        )
-    },
+            Text(
+                title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium
+            )
+        },
         supportingContent = description?.let {
             {
                 Text(
@@ -810,7 +771,8 @@ private fun SettingItem(
             supportingColor = MaterialTheme.colorScheme.onSurfaceVariant,
             leadingIconColor = iconColor,
             trailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ))
+        ),
+    )
 }
 
 @Composable

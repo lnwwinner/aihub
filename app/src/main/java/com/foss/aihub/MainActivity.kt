@@ -2,6 +2,7 @@ package com.foss.aihub
 
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -26,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -48,41 +50,74 @@ class MainActivity : ComponentActivity() {
     private var isInitialConfigReady by mutableStateOf(false)
     private var initialConfigError by mutableStateOf<String?>(null)
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            Toast.makeText(this, "Microphone enabled", Toast.LENGTH_SHORT).show()
+    private val requestPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grantResults: Map<String, Boolean> ->
+        pendingWebViewPermissionRequest?.let { request ->
+            val toGrant = mutableListOf<String>()
 
-            pendingWebViewPermissionRequest?.let { request ->
-                if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
-                    request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-                }
-                pendingWebViewPermissionRequest = null
+            if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                val audioGranted =
+                    grantResults[Manifest.permission.RECORD_AUDIO] == true || ContextCompat.checkSelfPermission(
+                        this, Manifest.permission.RECORD_AUDIO
+                    ) == PackageManager.PERMISSION_GRANTED
+                if (audioGranted) toGrant.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
             }
-        } else {
-            Toast.makeText(this, "Microphone permission denied", Toast.LENGTH_LONG).show()
 
-            pendingWebViewPermissionRequest?.deny()
+            if (request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                val cameraGranted =
+                    grantResults[Manifest.permission.CAMERA] == true || ContextCompat.checkSelfPermission(
+                        this, Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                if (cameraGranted) toGrant.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE)
+            }
+
+            if (toGrant.isNotEmpty()) {
+                request.grant(toGrant.toTypedArray())
+                val msg = when {
+                    toGrant.size > 1 -> this.getString(R.string.msg_camera_and_microphone_enabled)
+                    toGrant.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE) -> this.getString(R.string.msg_camera_enabled)
+                    else -> this.getString(R.string.msg_microphone_enabled)
+                }
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            } else {
+                request.deny()
+                Toast.makeText(
+                    this,
+                    this.getString(R.string.msg_permission_denied),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             pendingWebViewPermissionRequest = null
         }
     }
 
-    fun requestMicrophonePermissionForWebView(permissionRequest: PermissionRequest) {
+    fun requestWebViewPermissions(permissionRequest: PermissionRequest) {
         pendingWebViewPermissionRequest = permissionRequest
 
-        when {
-            ContextCompat.checkSelfPermission(
-                this, Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                permissionRequest.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-                pendingWebViewPermissionRequest = null
-            }
+        val permissionsNeeded = mutableListOf<String>()
 
-            else -> {
-                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
+        if (permissionRequest.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE) && ContextCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
         }
+
+        if (permissionRequest.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE) && ContextCompat.checkSelfPermission(
+                this, Manifest.permission.CAMERA
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsNeeded.add(Manifest.permission.CAMERA)
+        }
+
+        if (permissionsNeeded.isEmpty()) {
+            permissionRequest.grant(permissionRequest.resources)
+            pendingWebViewPermissionRequest = null
+            return
+        }
+
+        requestPermissionsLauncher.launch(permissionsNeeded.toTypedArray())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,10 +139,13 @@ class MainActivity : ComponentActivity() {
                     when {
                         initialConfigError != null -> {
                             ErrorScreen(
-                                message = initialConfigError ?: "Unknown error", onRetry = {
+                                message = initialConfigError
+                                    ?: stringResource(R.string.label_unknown_error),
+                                onRetry = {
                                     initialConfigError = null
-                                    lifecycleScope.launch { runInitialConfig() }
-                                })
+                                    lifecycleScope.launch { runInitialConfig(this@MainActivity) }
+                                },
+                            )
                         }
 
                         isInitialConfigReady -> {
@@ -123,7 +161,7 @@ class MainActivity : ComponentActivity() {
 
             lifecycleScope.launch {
                 if (needsInitialConfig()) {
-                    runInitialConfig()
+                    runInitialConfig(this@MainActivity)
                 } else {
                     isInitialConfigReady = true
                 }
@@ -139,7 +177,7 @@ class MainActivity : ComponentActivity() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "App failed to start\n${e.message}",
+                            text = stringResource(R.string.msg_fail_to_start, e.message.toString()),
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             textAlign = TextAlign.Center
                         )
@@ -156,7 +194,7 @@ class MainActivity : ComponentActivity() {
         return !hasDomain || !hasAiServices
     }
 
-    private suspend fun runInitialConfig() {
+    private suspend fun runInitialConfig(context: Context) {
         try {
             val (_, _) = ConfigUpdater.updateBothIfNeeded(this)
             settingsManager.cleanupAndFixServices(this)
@@ -165,8 +203,8 @@ class MainActivity : ComponentActivity() {
             initialConfigError = null
 
         } catch (e: Exception) {
-            initialConfigError =
-                e.message ?: "Failed to load configurations. Please check your internet connection."
+            isInitialConfigReady = false
+            initialConfigError = e.message ?: context.getString(R.string.msg_fail_to_load_config)
         }
     }
 
@@ -178,35 +216,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handleFileChooserResult(result: ActivityResult) {
-        val callback = this.filePathCallback
-
-        if (result.resultCode == RESULT_OK) {
-            val data = result.data
-            val uris: Array<Uri>? = if (data != null) {
-                WebChromeClient.FileChooserParams.parseResult(result.resultCode, data)
-            } else {
-                null
-            }
-            callback?.onReceiveValue(uris)
-        } else {
-            callback?.onReceiveValue(null)
-        }
-        this.filePathCallback = null
-    }
-
     fun launchFileChooser(
         filePathCallback: ValueCallback<Array<Uri>>,
         fileChooserParams: WebChromeClient.FileChooserParams?
     ) {
         this.filePathCallback = filePathCallback
-        val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 100)
+            }
+        }
+
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-            }
         }
 
         try {
@@ -218,5 +242,23 @@ class MainActivity : ComponentActivity() {
             filePathCallback.onReceiveValue(null)
             this.filePathCallback = null
         }
+    }
+
+    private fun handleFileChooserResult(result: ActivityResult) {
+        val callback = this.filePathCallback ?: return
+
+        var uris: Array<Uri>? = null
+        if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            if (data != null) {
+                val dataString = data.dataString
+                if (dataString != null) {
+                    uris = arrayOf(Uri.parse(dataString))
+                }
+            }
+        }
+
+        callback.onReceiveValue(uris)
+        this.filePathCallback = null
     }
 }

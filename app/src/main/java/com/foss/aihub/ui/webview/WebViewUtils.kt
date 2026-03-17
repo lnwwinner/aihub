@@ -11,6 +11,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.FrameLayout
 import com.foss.aihub.MainActivity
+import com.foss.aihub.R
 import com.foss.aihub.models.AiService
 import com.foss.aihub.models.AppSettings
 import com.foss.aihub.models.LinkType
@@ -35,6 +36,7 @@ fun createWebViewForService(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
         )
         webViewClient = ProgressTrackingWebViewClient(
+            context = activity,
             onProgressUpdate = onProgressUpdate,
             onLoadingStateChange = onLoadingStateChange,
             service = service,
@@ -51,32 +53,44 @@ fun createWebViewForService(
                 WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
                     var url = result.extra ?: return@setOnLongClickListener false
                     url = cleanTrackingParams(context, url)
-                    val title = extractLinkTitle(url)
+                    val title = extractLinkTitle(context, url)
                     onLinkLongPress(url, title, LinkType.HYPERLINK)
                     true
                 }
 
                 WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
                     val url = result.extra ?: return@setOnLongClickListener false
-                    onLinkLongPress(url, "Image Link", LinkType.IMAGE)
+                    onLinkLongPress(
+                        url,
+                        context.getString(R.string.label_image_link),
+                        LinkType.IMAGE
+                    )
                     true
                 }
 
                 WebView.HitTestResult.IMAGE_TYPE -> {
                     val url = result.extra ?: return@setOnLongClickListener false
-                    onLinkLongPress(url, "Image", LinkType.IMAGE)
+                    onLinkLongPress(url, context.getString(R.string.label_image), LinkType.IMAGE)
                     true
                 }
 
                 WebView.HitTestResult.EMAIL_TYPE -> {
                     val email = result.extra ?: return@setOnLongClickListener false
-                    onLinkLongPress("mailto:$email", "Email", LinkType.EMAIL)
+                    onLinkLongPress(
+                        "mailto:$email",
+                        context.getString(R.string.label_email),
+                        LinkType.EMAIL
+                    )
                     true
                 }
 
                 WebView.HitTestResult.PHONE_TYPE -> {
                     val phone = result.extra ?: return@setOnLongClickListener false
-                    onLinkLongPress("tel:$phone", "Phone", LinkType.PHONE)
+                    onLinkLongPress(
+                        "tel:$phone",
+                        context.getString(R.string.label_phone),
+                        LinkType.PHONE
+                    )
                     true
                 }
 

@@ -31,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
@@ -38,14 +39,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.foss.aihub.MainActivity
+import com.foss.aihub.R
 import com.foss.aihub.models.LinkData
+import com.foss.aihub.models.ServiceUiState
 import com.foss.aihub.models.WebViewState
 import com.foss.aihub.ui.components.AiHubAppBar
 import com.foss.aihub.ui.components.DrawerContent
@@ -53,7 +58,6 @@ import com.foss.aihub.ui.components.ErrorOverlay
 import com.foss.aihub.ui.components.ErrorType
 import com.foss.aihub.ui.components.LoadingOverlay
 import com.foss.aihub.ui.screens.dialogs.MD3LinkOptionsDialog
-import com.foss.aihub.ui.webview.WebViewSecurity
 import com.foss.aihub.ui.webview.createWebViewForService
 import com.foss.aihub.ui.webview.updateWebViewSettings
 import com.foss.aihub.utils.aiServices
@@ -61,38 +65,21 @@ import com.foss.aihub.utils.copyLinkToClipboard
 import com.foss.aihub.utils.openInExternalBrowser
 import com.foss.aihub.utils.shareLink
 import kotlinx.coroutines.launch
-import kotlin.system.exitProcess
 
-@SuppressLint("UnrememberedMutableState")
+@SuppressLint("LocalContextGetResourceValueCall", "UnrememberedMutableState")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiHubApp(activity: MainActivity) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val settingsManager = remember { activity.settingsManager }
-    val settings by settingsManager.settingsFlow.collectAsState()
-
-    var showLinkDialog by remember { mutableStateOf(false) }
-    var selectedLink by remember { mutableStateOf<LinkData?>(null) }
-    var previousEnabledServices by remember { mutableStateOf(settings.enabledServices) }
-    var previousDesktopView by remember { mutableStateOf(settings.desktopView) }
-    var previousThirdPartyCookies by remember { mutableStateOf(settings.thirdPartyCookies) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val configuration = LocalConfiguration.current
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
-    data class ServiceUiState(
-        val webViewState: WebViewState = WebViewState.LOADING,
-        val isLoading: Boolean = true,
-        val progress: Int = 0,
-        val error: Pair<Int, String>? = null,
-        val isVisible: Boolean = false
-    )
-
-    val serviceStates = remember { mutableStateMapOf<String, ServiceUiState>() }
-    val webViews = remember { mutableStateMapOf<String, WebView>() }
-    val loadedServices = remember { mutableStateSetOf<String>() }
-    val serviceAccessOrder = remember { mutableListOf<String>() }
+    val settingsManager = remember { activity.settingsManager }
+    val settings by settingsManager.settingsFlow.collectAsState()
 
     val initialId = if (settings.loadLastOpenedAI) {
         settingsManager.getLastOpenedService() ?: settings.defaultServiceId
@@ -104,6 +91,23 @@ fun AiHubApp(activity: MainActivity) {
         mutableStateOf(aiServices.find { it.id == initialId } ?: aiServices.first())
     }
 
+    var backPressedTime by remember { mutableLongStateOf(0L) }
+    var showLinkDialog by remember { mutableStateOf(false) }
+    var selectedLink by remember { mutableStateOf<LinkData?>(null) }
+    var showSettingsScreen by remember { mutableStateOf(false) }
+    var showManageServices by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
+
+    var previousEnabledServices by remember { mutableStateOf(settings.enabledServices) }
+    var previousDesktopView by remember { mutableStateOf(settings.desktopView) }
+    var previousThirdPartyCookies by remember { mutableStateOf(settings.thirdPartyCookies) }
+    var previousConnectionBlocking by remember { mutableStateOf(settings.blockUnnecessaryConnections) }
+
+    val serviceStates = remember { mutableStateMapOf<String, ServiceUiState>() }
+    val webViews = remember { mutableStateMapOf<String, WebView>() }
+    val loadedServices = remember { mutableStateSetOf<String>() }
+    val serviceAccessOrder = remember { mutableListOf<String>() }
+
     val currentState by derivedStateOf {
         serviceStates[selectedService.id] ?: ServiceUiState()
     }
@@ -111,22 +115,6 @@ fun AiHubApp(activity: MainActivity) {
     val hasCurrentError by derivedStateOf {
         currentState.error?.let { ErrorType.shouldShowOverlay(it.first) } == true
     }
-
-    var previousConnectionBlocking by remember {
-        mutableStateOf(WebViewSecurity.isBlockingEnabled)
-    }
-
-    LaunchedEffect(selectedService) {
-        if (settings.loadLastOpenedAI) {
-            settingsManager.saveLastOpenedService(selectedService.id)
-        }
-    }
-
-    var showSettingsScreen by remember { mutableStateOf(false) }
-    var showManageServices by remember { mutableStateOf(false) }
-    var showAbout by remember { mutableStateOf(false) }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
 
     fun updateServiceState(serviceId: String, update: (ServiceUiState) -> ServiceUiState) {
         val newState = update(serviceStates[serviceId] ?: ServiceUiState())
@@ -193,6 +181,18 @@ fun AiHubApp(activity: MainActivity) {
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(configuration.orientation) {
+        if (drawerState.isOpen) {
+            drawerState.close()
+        }
+    }
+
+    LaunchedEffect(selectedService) {
+        if (settings.loadLastOpenedAI) {
+            settingsManager.saveLastOpenedService(selectedService.id)
         }
     }
 
@@ -276,16 +276,18 @@ fun AiHubApp(activity: MainActivity) {
                         }
                     },
                     onSettingsClick = { showSettingsScreen = true },
+                    onAboutClick = { showAbout = true },
                     onClearSiteData = {
                         val serviceId = selectedService.id
                         val webView = webViews[serviceId]
                         if (webView != null) {
                             val currentUrl = webView.url ?: selectedService.url
                             val domain = try {
-                                android.net.Uri.parse(currentUrl).host ?: ""
-                            } catch (_: Exception) { "" }
+                                currentUrl.toUri().host ?: ""
+                            } catch (_: Exception) {
+                                ""
+                            }
 
-                            // Clear cookies for this domain only
                             val cookieManager = android.webkit.CookieManager.getInstance()
                             val cookies = cookieManager.getCookie(currentUrl)
                             if (cookies != null) {
@@ -293,24 +295,27 @@ fun AiHubApp(activity: MainActivity) {
                                     cookie.trim().split("=").firstOrNull()?.trim()
                                 }
                                 for (name in cookieNames) {
-                                    cookieManager.setCookie(currentUrl, "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
-                                    cookieManager.setCookie(currentUrl, "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=$domain")
+                                    cookieManager.setCookie(
+                                        currentUrl,
+                                        "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/"
+                                    )
+                                    cookieManager.setCookie(
+                                        currentUrl,
+                                        "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=$domain"
+                                    )
                                 }
                                 cookieManager.flush()
                             }
 
-                            // Clear localStorage and sessionStorage via JavaScript
                             webView.evaluateJavascript(
                                 "try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}",
                                 null
                             )
 
-                            // Clear WebView cache for this specific view and reload
                             webView.clearCache(true)
                             webView.clearFormData()
                             webView.clearHistory()
 
-                            // Reload the tab
                             updateServiceState(serviceId) { state ->
                                 state.copy(
                                     webViewState = WebViewState.LOADING,
@@ -322,17 +327,50 @@ fun AiHubApp(activity: MainActivity) {
                             webView.loadUrl(selectedService.url)
 
                             Toast.makeText(
-                                context,
-                                "Site data cleared for ${selectedService.name}",
-                                Toast.LENGTH_SHORT
+                                context, context.getString(
+                                    R.string.msg_site_data_cleared, selectedService.name
+                                ), Toast.LENGTH_SHORT
                             ).show()
                         }
                     },
                     loadedServiceIds = webViews.keys,
                     allServices = aiServices,
+                    onReload = { service ->
+                        webViews[service.id]?.reload()
+
+                        updateServiceState(service.id) { state ->
+                            state.copy(
+                                webViewState = WebViewState.LOADING,
+                                isLoading = true,
+                                error = null,
+                                progress = 0
+                            )
+                        }
+                    },
                     onServiceSelected = { service ->
                         selectedService = service
-                    })
+                    },
+                    onKillService = { service ->
+                        val serviceId = service.id
+                        if (serviceId == selectedService.id) return@AiHubAppBar
+
+                        webViews[serviceId]?.let { webView ->
+                            (webView.parent as? ViewGroup)?.removeView(webView)
+                            webView.destroy()
+                            webViews.remove(serviceId)
+                        }
+
+                        serviceStates.remove(serviceId)
+                        loadedServices.remove(serviceId)
+                        serviceAccessOrder.remove(serviceId)
+
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.msg_service_killed, service.name),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                )
             },
             snackbarHost = {
                 SnackbarHost(
@@ -549,7 +587,10 @@ fun AiHubApp(activity: MainActivity) {
 
     BackHandler(enabled = !showSettingsScreen && !showManageServices) {
         when {
-            drawerState.isOpen -> scope.launch { drawerState.close() }
+            drawerState.isOpen -> {
+                scope.launch { drawerState.close() }
+            }
+
             hasCurrentError -> {
                 updateServiceState(selectedService.id) { state ->
                     state.copy(error = null)
@@ -568,7 +609,17 @@ fun AiHubApp(activity: MainActivity) {
                 webViews[selectedService.id]?.goBack()
             }
 
-            else -> exitProcess(0)
+            else -> {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - backPressedTime < 2000L) {
+                    activity.finish()
+                } else {
+                    backPressedTime = currentTime
+                    Toast.makeText(
+                        context, "Press back again to exit", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
     }
 
@@ -604,10 +655,10 @@ fun AiHubApp(activity: MainActivity) {
     var previousMaxKeepAlive by remember { mutableIntStateOf(settings.maxKeepAlive) }
 
     LaunchedEffect(
-        settings, WebViewSecurity.isBlockingEnabled
+        settings, settings.blockUnnecessaryConnections
     ) {
         val connectionBlockingChanged =
-            WebViewSecurity.isBlockingEnabled != previousConnectionBlocking
+            settings.blockUnnecessaryConnections != previousConnectionBlocking
         val limitChanged = settings.maxKeepAlive != previousMaxKeepAlive
 
         if (settings != previousSettings || connectionBlockingChanged || limitChanged) {
@@ -628,11 +679,10 @@ fun AiHubApp(activity: MainActivity) {
             }
 
             previousSettings = settings
-            previousConnectionBlocking = WebViewSecurity.isBlockingEnabled
+            previousConnectionBlocking = settings.blockUnnecessaryConnections
         }
     }
 
-    // Reload all tabs when settings change
     LaunchedEffect(showSettingsScreen) {
         if (!showSettingsScreen) {
             val desktopViewChanged = settings.desktopView != previousDesktopView
@@ -642,7 +692,7 @@ fun AiHubApp(activity: MainActivity) {
 
             if (reloadRequired) {
                 applySettingsToAllWebViews(true)
-                Log.d("AI_HUBP", "Reloading all webviews...")
+                Log.d("AI_HUB", "Reloading all webviews...")
             }
 
             previousDesktopView = settings.desktopView
@@ -696,10 +746,10 @@ fun AiHubApp(activity: MainActivity) {
 
         SettingsScreen(
             onBack = {
-            showSettingsScreen = false
-            applySettingsToAllWebViews(false)
-            enforceWebViewLimit()
-        },
+                showSettingsScreen = false
+                applySettingsToAllWebViews(false)
+                enforceWebViewLimit()
+            },
             settingsManager = settingsManager,
             onManageServicesClick = { showManageServices = true },
             onClearCache = {
@@ -717,11 +767,17 @@ fun AiHubApp(activity: MainActivity) {
                         clearHistory()
                         destroy()
                     }
+
+                    scope.launch {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.msg_cache_cleared),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 } catch (e: Exception) {
                     Log.e("AI_HUB", "Error clearing cache", e)
                 }
-
-                Toast.makeText(context, "Cache cleared", Toast.LENGTH_SHORT).show()
             },
             onClearData = {
                 webViews.forEach { (serviceId, webView) ->
@@ -743,13 +799,15 @@ fun AiHubApp(activity: MainActivity) {
 
                     scope.launch {
                         reloadAllActiveTabs()
-                        Toast.makeText(context, "All data cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.msg_all_data_cleared),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
             },
-            onAboutClick = {
-                showAbout = true
-            })
+        )
     }
 
     if (showManageServices) {
