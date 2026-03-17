@@ -163,6 +163,7 @@ class SettingsManager(context: Context) {
             theme = sharedPref.getString("theme", "auto") ?: "auto",
             desktopView = sharedPref.getBoolean("desktopView", false),
             thirdPartyCookies = sharedPref.getBoolean("thirdPartyCookies", false),
+            blockUnnecessaryConnections = sharedPref.getBoolean("blockUnnecessaryConnections", true),
             enabledServices = loadEnabledServices(),
             serviceOrder = loadServiceOrder(),
             favoriteServices = loadFavoriteServices()
@@ -179,6 +180,7 @@ class SettingsManager(context: Context) {
             putString("theme", settings.theme)
             putBoolean("desktopView", settings.desktopView)
             putBoolean("thirdPartyCookies", settings.thirdPartyCookies)
+            putBoolean("blockUnnecessaryConnections", settings.blockUnnecessaryConnections)
             saveEnabledServices(settings.enabledServices)
             saveServiceOrder(settings.serviceOrder)
             saveFavoriteServices(settings.favoriteServices)

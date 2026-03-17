@@ -1,19 +1,10 @@
 package com.foss.aihub.ui.webview
 
 import android.content.Context
-import android.util.Log
 import androidx.core.net.toUri
 import com.foss.aihub.utils.SettingsManager
 
 object WebViewSecurity {
-    private var _isBlockingEnabled = true
-
-    var isBlockingEnabled: Boolean
-        get() = _isBlockingEnabled
-        set(value) {
-            _isBlockingEnabled = value
-        }
-
     private lateinit var settings: SettingsManager
 
     fun init(context: Context) {
@@ -23,11 +14,7 @@ object WebViewSecurity {
     }
 
     fun allowConnectivityForService(serviceId: String, url: String): Boolean {
-        if (!::settings.isInitialized) {
-            Log.w("WebViewSecurity", "Not initialized → allowing")
-            return true
-        }
-
+        if (!settings.settingsFlow.value.blockUnnecessaryConnections) return true
         if (url.isBlank()) return false
 
         if (url.startsWith("blob:") || url.startsWith("about:blank") || url.startsWith("data:") || url.startsWith(
