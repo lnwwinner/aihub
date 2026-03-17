@@ -6,3 +6,11 @@ enum class WebViewState {
     SUCCESS,    
     ERROR       
 }
+
+data class ServiceUiState(
+    val webViewState: WebViewState = WebViewState.LOADING,
+    val isLoading: Boolean = true,
+    val progress: Int = 0,
+    val error: Pair<Int, String>? = null,
+    val isVisible: Boolean = false
+)
