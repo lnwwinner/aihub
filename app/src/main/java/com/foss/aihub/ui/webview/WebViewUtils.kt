@@ -44,7 +44,7 @@ fun createWebViewForService(
         )
 
         webChromeClient = ProgressTrackingWebChromeClient(
-            onProgressUpdate = onProgressUpdate, activity = activity
+            onProgressUpdate = onProgressUpdate, activity = activity, mainWebView = this
         )
 
         setOnLongClickListener { view ->
