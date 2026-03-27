@@ -13,16 +13,16 @@ data class AiService(
 )
 
 data class AppSettings(
-    var enableZoom: Boolean = true,
-    var loadLastOpenedAI: Boolean = true,
-    var fontSize: String = "medium",
-    var defaultServiceId: String = "chatgpt",
     var theme: String = "auto",
+    var loadLastOpenedAI: Boolean = true,
+    var defaultServiceId: String = "chatgpt",
+    var serviceOrder: List<String> = emptyList(),
+    var enabledServices: Set<String> = emptySet(),
+    var favoriteServices: Set<String> = emptySet(),
+    var maxKeepAlive: Int = 5,
+    var enableZoom: Boolean = true,
     var desktopView: Boolean = false,
     var thirdPartyCookies: Boolean = false,
-    var maxKeepAlive: Int = 5,
-    var blockUnnecessaryConnections: Boolean = true,
-    var enabledServices: Set<String> = emptySet(),
-    var serviceOrder: List<String> = emptyList(),
-    var favoriteServices: Set<String> = emptySet()
+    var fontSize: String = "medium",
+    var blockUnnecessaryConnections: Boolean = true
 )

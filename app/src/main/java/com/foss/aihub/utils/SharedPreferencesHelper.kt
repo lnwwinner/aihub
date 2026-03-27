@@ -155,35 +155,35 @@ class SettingsManager(context: Context) {
 
     private fun loadSettings(): AppSettings {
         return AppSettings(
-            enableZoom = sharedPref.getBoolean("enableZoom", true),
-            loadLastOpenedAI = sharedPref.getBoolean("loadLastOpenedAI", true),
-            fontSize = sharedPref.getString("fontSize", "medium") ?: "medium",
-            defaultServiceId = sharedPref.getString("defaultServiceId", "chatgpt") ?: "chatgpt",
-            maxKeepAlive = sharedPref.getInt("maxKeepAlive", 5),
             theme = sharedPref.getString("theme", "auto") ?: "auto",
+            loadLastOpenedAI = sharedPref.getBoolean("loadLastOpenedAI", true),
+            defaultServiceId = sharedPref.getString("defaultServiceId", "chatgpt") ?: "chatgpt",
+            serviceOrder = loadServiceOrder(),
+            enabledServices = loadEnabledServices(),
+            favoriteServices = loadFavoriteServices(),
+            maxKeepAlive = sharedPref.getInt("maxKeepAlive", 5),
+            enableZoom = sharedPref.getBoolean("enableZoom", true),
             desktopView = sharedPref.getBoolean("desktopView", false),
             thirdPartyCookies = sharedPref.getBoolean("thirdPartyCookies", false),
-            blockUnnecessaryConnections = sharedPref.getBoolean("blockUnnecessaryConnections", true),
-            enabledServices = loadEnabledServices(),
-            serviceOrder = loadServiceOrder(),
-            favoriteServices = loadFavoriteServices()
+            fontSize = sharedPref.getString("fontSize", "medium") ?: "medium",
+            blockUnnecessaryConnections = sharedPref.getBoolean("blockUnnecessaryConnections", true)
         )
     }
 
     private fun saveSettings(settings: AppSettings) {
         sharedPref.edit {
-            putBoolean("enableZoom", settings.enableZoom)
-            putBoolean("loadLastOpenedAI", settings.loadLastOpenedAI)
-            putString("fontSize", settings.fontSize)
-            putString("defaultServiceId", settings.defaultServiceId)
-            putInt("maxKeepAlive", settings.maxKeepAlive)
             putString("theme", settings.theme)
+            putBoolean("loadLastOpenedAI", settings.loadLastOpenedAI)
+            putString("defaultServiceId", settings.defaultServiceId)
+            saveServiceOrder(settings.serviceOrder)
+            saveEnabledServices(settings.enabledServices)
+            saveFavoriteServices(settings.favoriteServices)
+            putInt("maxKeepAlive", settings.maxKeepAlive)
+            putBoolean("enableZoom", settings.enableZoom)
             putBoolean("desktopView", settings.desktopView)
             putBoolean("thirdPartyCookies", settings.thirdPartyCookies)
+            putString("fontSize", settings.fontSize)
             putBoolean("blockUnnecessaryConnections", settings.blockUnnecessaryConnections)
-            saveEnabledServices(settings.enabledServices)
-            saveServiceOrder(settings.serviceOrder)
-            saveFavoriteServices(settings.favoriteServices)
         }
     }
 
