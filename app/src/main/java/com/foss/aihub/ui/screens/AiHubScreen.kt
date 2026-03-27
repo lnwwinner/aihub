@@ -3,13 +3,14 @@ package com.foss.aihub.ui.screens
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.JsResult
+import android.webkit.CookieManager
 import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -47,6 +48,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.foss.aihub.MainActivity
 import com.foss.aihub.R
+import com.foss.aihub.models.JsDialog
 import com.foss.aihub.models.LinkData
 import com.foss.aihub.models.ServiceUiState
 import com.foss.aihub.models.WebViewState
@@ -55,7 +57,7 @@ import com.foss.aihub.ui.components.DrawerContent
 import com.foss.aihub.ui.components.ErrorOverlay
 import com.foss.aihub.ui.components.ErrorType
 import com.foss.aihub.ui.components.LoadingOverlay
-import com.foss.aihub.ui.screens.dialogs.CustomAlertDialog
+import com.foss.aihub.ui.screens.dialogs.JsDialogHandler
 import com.foss.aihub.ui.screens.dialogs.LinkOptionsDialog
 import com.foss.aihub.ui.webview.createWebViewForService
 import com.foss.aihub.ui.webview.updateWebViewSettings
@@ -64,6 +66,7 @@ import com.foss.aihub.utils.copyLinkToClipboard
 import com.foss.aihub.utils.openInExternalBrowser
 import com.foss.aihub.utils.shareLink
 import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
 fun AiHubApp(context: MainActivity) {
@@ -104,8 +107,7 @@ fun AiHubApp(context: MainActivity) {
     val loadedServices = remember { mutableStateSetOf<String>() }
     val serviceAccessOrder = remember { mutableListOf<String>() }
 
-    var jsMessage by remember { mutableStateOf<String?>(null) }
-    var jsResult by remember { mutableStateOf<JsResult?>(null) }
+    var jsDialog by remember { mutableStateOf<JsDialog?>(null) }
 
     val currentState by remember {
         derivedStateOf {
@@ -272,7 +274,7 @@ fun AiHubApp(context: MainActivity) {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing),
+                .windowInsetsPadding(WindowInsets.safeDrawing),
             topBar = {
                 AiHubAppBar(
                     selectedService = selectedService,
@@ -294,7 +296,7 @@ fun AiHubApp(context: MainActivity) {
                                 ""
                             }
 
-                            val cookieManager = android.webkit.CookieManager.getInstance()
+                            val cookieManager = CookieManager.getInstance()
                             val cookies = cookieManager.getCookie(currentUrl)
                             if (cookies != null) {
                                 val cookieNames = cookies.split(";").mapNotNull { cookie ->
@@ -447,9 +449,26 @@ fun AiHubApp(context: MainActivity) {
                                         webViews[currentService.id]?.visibility = View.GONE
                                     },
                                     onJsAlertRequest = { message, result ->
-                                        jsMessage = message
-                                        jsResult = result
-                                    })
+                                        message?.let {
+                                            jsDialog = JsDialog.Alert(it, result!!)
+                                        }
+                                    },
+                                    onJsConfirmRequest = { message, result ->
+                                        message?.let {
+                                            jsDialog = JsDialog.Confirm(it, result!!)
+                                        }
+                                    },
+                                    onJsPromptRequest = { message, result ->
+                                        message?.let {
+                                            jsDialog = JsDialog.Prompt(it, result!!)
+                                        }
+                                    },
+                                    onJsBeforeUnloadRequest = { message, result ->
+                                        message?.let {
+                                            jsDialog = JsDialog.BeforeUnload(it, result!!)
+                                        }
+                                    },
+                                )
 
                                 updateWebViewSettings(newWebView, settings, false)
                                 webViews[currentService.id] = newWebView
@@ -524,9 +543,26 @@ fun AiHubApp(context: MainActivity) {
                                     webViews[currentService.id]?.visibility = View.GONE
                                 },
                                 onJsAlertRequest = { message, result ->
-                                    jsMessage = message
-                                    jsResult = result
-                                })
+                                    message?.let {
+                                        jsDialog = JsDialog.Alert(it, result!!)
+                                    }
+                                },
+                                onJsConfirmRequest = { message, result ->
+                                    message?.let {
+                                        jsDialog = JsDialog.Confirm(it, result!!)
+                                    }
+                                },
+                                onJsPromptRequest = { message, result ->
+                                    message?.let {
+                                        jsDialog = JsDialog.Prompt(it, result!!)
+                                    }
+                                },
+                                onJsBeforeUnloadRequest = { message, result ->
+                                    message?.let {
+                                        jsDialog = JsDialog.BeforeUnload(it, result!!)
+                                    }
+                                },
+                            )
 
                             updateWebViewSettings(newWebView, settings, false)
                             webViews[currentService.id] = newWebView
@@ -752,12 +788,20 @@ fun AiHubApp(context: MainActivity) {
         }
     }
 
-    if (jsMessage != null) {
+    if (jsDialog != null) {
         BackHandler {
-            jsResult?.cancel()
-            jsMessage = null
+            when (val dialog = jsDialog) {
+                is JsDialog.Alert -> dialog.result.cancel()
+                is JsDialog.Confirm -> dialog.result.cancel()
+                is JsDialog.Prompt -> dialog.result.cancel()
+                is JsDialog.BeforeUnload -> dialog.result.cancel()
+                null -> {}
+            }
+            jsDialog = null
         }
-        CustomAlertDialog(context, jsMessage, jsResult, onDismiss = { jsMessage = null })
+
+        JsDialogHandler(
+            dialog = jsDialog, context = context, onDismiss = { jsDialog = null })
     }
 
     if (showSettingsScreen) {
@@ -778,10 +822,10 @@ fun AiHubApp(context: MainActivity) {
                 try {
                     context.cacheDir?.deleteRecursively()
 
-                    val webViewCacheDir = java.io.File(context.cacheDir, "webviewCache")
+                    val webViewCacheDir = File(context.cacheDir, "webviewCache")
                     webViewCacheDir.deleteRecursively()
 
-                    val webViewDatabaseDir = java.io.File(context.filesDir, "webview")
+                    val webViewDatabaseDir = File(context.filesDir, "webview")
                     webViewDatabaseDir.deleteRecursively()
 
                     WebView(context).apply {
@@ -814,7 +858,7 @@ fun AiHubApp(context: MainActivity) {
                     }
                 }
 
-                val cookieManager = android.webkit.CookieManager.getInstance()
+                val cookieManager = CookieManager.getInstance()
 
                 cookieManager.removeAllCookies { _ ->
                     cookieManager.flush()

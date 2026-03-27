@@ -3,6 +3,7 @@ package com.foss.aihub.ui.webview
 import android.annotation.SuppressLint
 import android.net.Uri
 import android.util.Log
+import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -16,6 +17,9 @@ open class CustomWebChromeClient(
     private val context: MainActivity,
     private val onProgressUpdate: (Int) -> Unit,
     private val onJsAlertRequest: (String?, JsResult?) -> Unit,
+    private val onJsPromptRequest: (String?, JsResult?) -> Unit,
+    private val onJsConfirmRequest: (String?, JsResult?) -> Unit,
+    private val onJsBeforeUnloadRequest: (String?, JsResult?) -> Unit,
     private val mainWebView: WebView? = null
 ) : WebChromeClient() {
     private val activeWebViews = mutableListOf<WebView>()
@@ -109,6 +113,37 @@ open class CustomWebChromeClient(
     ): Boolean {
         context.runOnUiThread {
             onJsAlertRequest(message, result)
+        }
+        return true
+    }
+
+    override fun onJsPrompt(
+        view: WebView?,
+        url: String?,
+        message: String?,
+        defaultValue: String?,
+        result: JsPromptResult?
+    ): Boolean {
+        context.runOnUiThread {
+            onJsPromptRequest(message, result)
+        }
+        return true
+    }
+
+    override fun onJsConfirm(
+        view: WebView?, url: String?, message: String?, result: JsResult?
+    ): Boolean {
+        context.runOnUiThread {
+            onJsConfirmRequest(message, result)
+        }
+        return true
+    }
+
+    override fun onJsBeforeUnload(
+        view: WebView?, url: String?, message: String?, result: JsResult?
+    ): Boolean {
+        context.runOnUiThread {
+            onJsBeforeUnloadRequest(message, result)
         }
         return true
     }

@@ -31,7 +31,10 @@ fun createWebViewForService(
     onLoadingStateChange: (Boolean) -> Unit,
     onLinkLongPress: (String, String, LinkType) -> Unit,
     onError: (Int, String) -> Unit,
-    onJsAlertRequest: (String?, JsResult?) -> Unit
+    onJsAlertRequest: (String?, JsResult?) -> Unit,
+    onJsPromptRequest: (String?, JsResult?) -> Unit,
+    onJsConfirmRequest: (String?, JsResult?) -> Unit,
+    onJsBeforeUnloadRequest: (String?, JsResult?) -> Unit,
 ): WebView {
     return WebView(context).apply {
         addJavascriptInterface(BlobDownloadInterface(context), "AndroidBlobHandler")
@@ -56,6 +59,9 @@ fun createWebViewForService(
             context = activity,
             onProgressUpdate = onProgressUpdate,
             onJsAlertRequest = onJsAlertRequest,
+            onJsPromptRequest = onJsPromptRequest,
+            onJsConfirmRequest = onJsConfirmRequest,
+            onJsBeforeUnloadRequest = onJsBeforeUnloadRequest,
             mainWebView = this,
         )
 

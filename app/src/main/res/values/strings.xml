@@ -22,6 +22,7 @@
     <string name="action_copy_link">Copy link</string>
     <string name="action_delete">Delete</string>
     <string name="action_filter">Filter</string>
+    <string name="action_leave">Leave</string>
     <string name="action_more_options">More options</string>
     <string name="action_move_down">Move down</string>
     <string name="action_move_up">Move up</string>
@@ -37,6 +38,7 @@
     <string name="action_share_link">Share link</string>
     <string name="action_source_code">Source code</string>
     <string name="action_star">Star</string>
+    <string name="action_stay">Stay</string>
     <string name="action_update">Update</string>
     <string name="action_update_services">Update AI &amp; services</string>
 
@@ -61,7 +63,9 @@
     <string name="hint_search_services">Search services…</string>
     <string name="label_active">Active</string>
     <string name="label_alert">Alert</string>
+    <string name="label_before_leave">Before Leave</string>
     <string name="label_blocked_url">Blocked URL</string>
+    <string name="label_confirm">Confirm</string>
     <string name="label_connecting">Connecting…</string>
     <string name="label_connection_failed">Connection failed</string>
     <string name="label_contributors">Contributors</string>
@@ -88,6 +92,7 @@
     <string name="label_page_blocked">Page blocked</string>
     <string name="label_phone">Phone</string>
     <string name="label_privacy_policy_summary">No tracking, no telemetry</string>
+    <string name="label_prompt">Prompt</string>
     <string name="label_ready">Ready</string>
     <string name="label_refreshing">Refreshing…</string>
     <string name="label_select">Select</string>
