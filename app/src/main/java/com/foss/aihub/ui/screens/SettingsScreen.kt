@@ -33,7 +33,6 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.TextIncrease
 import androidx.compose.material.icons.outlined.ZoomIn
@@ -76,7 +75,6 @@ import com.foss.aihub.R
 import com.foss.aihub.ui.components.Md3TopAppBar
 import com.foss.aihub.utils.SettingsManager
 import com.foss.aihub.utils.aiServices
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
