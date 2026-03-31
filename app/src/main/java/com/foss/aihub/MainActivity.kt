@@ -38,8 +38,14 @@ import com.foss.aihub.ui.screens.InitialLoadingScreen
 import com.foss.aihub.ui.webview.WebViewSecurity
 import com.foss.aihub.utils.ConfigUpdater
 import com.foss.aihub.utils.SettingsManager
+import com.foss.aihub.utils.isNoNetworkError
 import com.foss.aihub.utils.refreshAiServicesFromSettings
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
+import java.io.IOException
 
 class MainActivity : ComponentActivity() {
     var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -200,10 +206,27 @@ class MainActivity : ComponentActivity() {
 
             isInitialConfigReady = true
             initialConfigError = null
-
-        } catch (e: Exception) {
+        } catch (error: Exception) {
             isInitialConfigReady = false
-            initialConfigError = e.message ?: context.getString(R.string.msg_fail_to_load_config)
+            initialConfigError = when {
+                error.isNoNetworkError() -> context.getString(R.string.error_no_connection_message)
+
+                error is SocketTimeoutException || error is HttpRequestTimeoutException -> context.getString(
+                    R.string.error_timeout_message
+                )
+
+                error is SerializationException -> context.getString(R.string.error_seriliaziation_message)
+
+                error is ResponseException -> {
+                    val code = error.response.status.value
+                    context.getString(R.string.error_request_failed_message, code)
+                }
+
+                error is IOException -> context.getString(R.string.error_no_connection_message)
+
+                else -> context.getString(R.string.error_something_went_wrong_message) + (error.message?.let { ": $it" }
+                    ?: "")
+            }
         }
     }
 

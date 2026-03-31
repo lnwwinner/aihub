@@ -57,16 +57,14 @@
     <string name="error_generic_message">An unexpected error occurred. Please try again.</string>
     <string name="error_generic_title">Something went wrong</string>
     <string name="error_no_connection_message">Cannot connect to server. Check your internet connection.</string>
-    <string name="error_request_failed_message">Request failed. URL is invalid or malformed.</string>
+    <string name="error_request_failed_message">Request failed. HTTP error %1$d</string>
     <string name="error_seriliaziation_message">Received unexpected data from server. Please try again later.</string>
-    <string name="error_server_having_issue_message">Server is having issues. Try again later.</string>
     <string name="error_service_info_format">Service: %1$s • Code: %2$d</string>
     <string name="error_something_went_wrong_message">Something went wrong. Please try again.</string>
     <string name="error_timeout_message">Request timed out. Please check your internet and try again.</string>
     <string name="error_title_no_connection">No Connection</string>
     <string name="error_title_security_issue">Security Issue</string>
     <string name="error_title_server_error">Server Error</string>
-    <string name="error_unexpected_response">Unexpected server response. Please try again.</string>
     <string name="error_unknown">Unknown error</string>
 
     <!-- Labels -->

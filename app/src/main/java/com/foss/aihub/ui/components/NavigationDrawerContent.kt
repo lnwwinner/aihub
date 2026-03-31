@@ -76,8 +76,13 @@ import com.foss.aihub.utils.ServiceChanges
 import com.foss.aihub.utils.UpdateResult
 import com.foss.aihub.utils.aiServices
 import com.foss.aihub.utils.checkUpdate
+import com.foss.aihub.utils.isNoNetworkError
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
+import java.io.IOException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -492,52 +497,30 @@ fun DrawerContent(
                                         ).show()
                                     }
                                 } catch (error: Exception) {
-                                    when (error) {
-                                        is io.ktor.client.network.sockets.SocketTimeoutException -> {
-                                            Toast.makeText(
-                                                appContext,
-                                                context.getString(R.string.error_timeout_message),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                    val errorMsg = when {
+                                        error.isNoNetworkError() -> context.getString(R.string.error_no_connection_message)
+
+                                        error is SocketTimeoutException || error is HttpRequestTimeoutException -> context.getString(
+                                            R.string.error_timeout_message
+                                        )
+
+                                        error is SerializationException -> context.getString(R.string.error_seriliaziation_message)
+
+                                        error is ResponseException -> {
+                                            val code = error.response.status.value
+                                            context.getString(
+                                                R.string.error_request_failed_message, code
+                                            )
                                         }
 
-                                        is SerializationException -> {
-                                            Toast.makeText(
-                                                appContext,
-                                                context.getString(R.string.error_seriliaziation_message),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
+                                        error is IOException -> context.getString(R.string.error_no_connection_message)
 
-                                        is io.ktor.client.plugins.ResponseException -> {
-                                            val statusCode = error.response.status.value
-                                            val message = when (statusCode) {
-                                                in 400..499 -> context.getString(R.string.error_request_failed_message)
-                                                in 500..599 -> context.getString(R.string.error_server_having_issue_message)
-                                                else -> context.getString(R.string.error_unexpected_response)
-                                            }
-
-                                            Toast.makeText(
-                                                appContext, message, Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-
-                                        is java.nio.channels.UnresolvedAddressException -> {
-                                            Toast.makeText(
-                                                appContext,
-                                                context.getString(R.string.error_no_connection_message),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-
-                                        else -> {
-                                            Toast.makeText(
-                                                appContext,
-                                                context.getString(R.string.error_something_went_wrong_message),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
+                                        else -> context.getString(R.string.error_something_went_wrong_message)
                                     }
+
+                                    Toast.makeText(
+                                        appContext, errorMsg, Toast.LENGTH_SHORT
+                                    ).show()
                                 } finally {
                                     isUpdatingDomainRules = false
                                 }

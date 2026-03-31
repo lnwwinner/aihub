@@ -2,7 +2,8 @@ package com.foss.aihub.utils
 
 import android.content.Context
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -11,7 +12,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 object ConfigUpdater {
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(OkHttp) {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000L
+            connectTimeoutMillis = 10_000L
+            socketTimeoutMillis = 15_000L
+        }
+    }
 
     suspend fun updateBothIfNeeded(context: Context): Pair<Boolean, Boolean> =
         withContext(Dispatchers.IO) {
