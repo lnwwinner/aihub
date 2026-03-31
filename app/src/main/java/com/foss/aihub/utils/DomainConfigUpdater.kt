@@ -30,7 +30,7 @@ object ConfigUpdater {
     ): Boolean {
         val response = client.get(CLOUD_BASE_URL + fileName)
         if (!response.status.isSuccess()) {
-            return false
+            throw io.ktor.client.plugins.ResponseException(response, "HTTP ${response.status}")
         }
 
         val json = response.bodyAsText()
