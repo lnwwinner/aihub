@@ -1,6 +1,7 @@
 package com.foss.aihub.ui.webview
 
 import android.content.Context
+import android.util.Log
 import androidx.core.net.toUri
 import com.foss.aihub.utils.SettingsManager
 
@@ -44,7 +45,10 @@ object WebViewSecurity {
         }
 
         val allowed = settings.getServiceDomains()[serviceId] ?: return false
-
-        return allowed.any { host == it || host.endsWith(".$it") }
+        if (allowed.any { host == it || host.endsWith(".$it") }) {
+            Log.d("AI_HUB", "✅ Allowed: $url")
+            return true
+        }
+        return false
     }
 }
