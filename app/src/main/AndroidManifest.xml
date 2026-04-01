@@ -24,7 +24,7 @@
         android:theme="@style/Theme.AIHub">
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|uiMode"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard"
             android:exported="true"
             android:theme="@style/Theme.AIHub">
 
