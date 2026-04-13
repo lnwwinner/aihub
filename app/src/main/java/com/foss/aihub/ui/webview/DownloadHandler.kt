@@ -17,7 +17,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -81,13 +80,12 @@ object DownloadHandler {
                     Toast.LENGTH_SHORT
                 ).show()
 
-                val bytes = downloadFileWithCookies(url, userAgent)
-
-                saveToDownloadsFolder(
+                downloadAndSaveStreaming(
                     context = context,
+                    url = url,
+                    userAgent = userAgent,
                     fileName = sanitized,
-                    mimeType = mimeType ?: "application/octet-stream",
-                    data = bytes
+                    mimeType = mimeType ?: "application/octet-stream"
                 )
 
                 Toast.makeText(
@@ -98,63 +96,42 @@ object DownloadHandler {
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(
-                    context,
-                    context.getString(R.string.msg_download_failed),
-                    Toast.LENGTH_SHORT
+                    context, context.getString(R.string.msg_download_failed), Toast.LENGTH_SHORT
                 ).show()
             }
         }
     }
 
-    private suspend fun downloadFileWithCookies(url: String, userAgent: String): ByteArray =
-        withContext(Dispatchers.IO) {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            try {
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("User-Agent", userAgent)
+    private suspend fun downloadAndSaveStreaming(
+        context: Context, url: String, userAgent: String, fileName: String, mimeType: String
+    ) = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
-                val cookies = CookieManager.getInstance().getCookie(url)
-                if (!cookies.isNullOrBlank()) {
+        var connection: HttpURLConnection? = null
+
+        try {
+            connection = URL(url).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("User-Agent", userAgent)
+
+            CookieManager.getInstance().getCookie(url)?.let { cookies ->
+                if (cookies.isNotBlank()) {
                     connection.setRequestProperty("Cookie", cookies)
                 }
-
-                connection.instanceFollowRedirects = true
-                connection.connect()
-
-                val responseCode = connection.responseCode
-                if (responseCode != HttpURLConnection.HTTP_OK) {
-                    throw Exception("Server returned code $responseCode")
-                }
-
-                val inputStream = connection.inputStream
-                val byteArrayOutputStream = ByteArrayOutputStream()
-
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                val contentLength = connection.contentLength.toLong()
-
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    byteArrayOutputStream.write(buffer, 0, bytesRead)
-                    if (contentLength > 0) {
-                        val progress = (byteArrayOutputStream.size() * 100 / contentLength).toInt()
-                        Log.d("Download", "Progress: $progress%")
-                    }
-                }
-                byteArrayOutputStream.toByteArray()
-            } finally {
-                connection.disconnect()
             }
-        }
 
-    private suspend fun saveToDownloadsFolder(
-        context: Context, fileName: String, mimeType: String, data: ByteArray
-    ) {
-        withContext(Dispatchers.IO) {
-            val resolver = context.contentResolver
-            val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            connection.instanceFollowRedirects = true
+            connection.connect()
+
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                throw Exception("Server returned code ${connection.responseCode}")
+            }
+
+            val contentLength = connection.contentLengthLong
+            val inputStream = connection.inputStream
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
                 val contentValues = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, safeName)
                     put(MediaStore.Downloads.MIME_TYPE, mimeType)
@@ -168,7 +145,19 @@ object DownloadHandler {
 
                 try {
                     resolver.openOutputStream(itemUri)?.use { outputStream ->
-                        outputStream.write(data)
+                        val buffer = ByteArray(16 * 1024) // 16KB chunks
+                        var bytesRead: Int
+                        var totalBytes = 0L
+
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            totalBytes += bytesRead
+
+                            if (contentLength > 0) {
+                                val progress = (totalBytes * 100 / contentLength).toInt()
+                                Log.d("Download", "Progress: $progress%")
+                            }
+                        }
                         outputStream.flush()
                     } ?: throw Exception("Failed to open output stream")
 
@@ -177,11 +166,13 @@ object DownloadHandler {
                     }
                     resolver.update(itemUri, updateValues, null, null)
 
-                    Log.d("Download", "File saved successfully (API 29+): $safeName at $itemUri")
+                    Log.d("Download", "File saved successfully (API 29+): $safeName")
+
                 } catch (e: Exception) {
                     resolver.delete(itemUri, null, null)
                     throw e
                 }
+
             } else {
                 val downloadsDir =
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
@@ -200,19 +191,33 @@ object DownloadHandler {
 
                 downloadsDir.mkdirs()
 
-                finalFile.outputStream().use { it.write(data) }
+                finalFile.outputStream().use { outputStream ->
+                    val buffer = ByteArray(16 * 1024)
+                    var bytesRead: Int
+                    var totalBytes = 0L
+
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalBytes += bytesRead
+
+                        if (contentLength > 0) {
+                            val progress = (totalBytes * 100 / contentLength).toInt()
+                            Log.d("Download", "Progress: $progress%")
+                        }
+                    }
+                }
 
                 MediaScannerConnection.scanFile(
                     context, arrayOf(finalFile.absolutePath), arrayOf(mimeType)
                 ) { path, uri ->
-                    Log.d("Download", "File scanned successfully: $path → $uri")
+                    Log.d("Download", "File scanned: $path → $uri")
                 }
 
-                Log.d(
-                    "Download",
-                    "File saved successfully (Legacy API 26-28): ${finalFile.absolutePath}"
-                )
+                Log.d("Download", "File saved successfully (Legacy): ${finalFile.absolutePath}")
             }
+
+        } finally {
+            connection?.disconnect()
         }
     }
 }
